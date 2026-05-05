@@ -26,6 +26,7 @@ In this challenge, you will create:
 - **Streamlit Web App**: A simple, interactive UI for uploading and processing claim images
 - **REST API Integration**: Connect to the Challenge 4 REST API to process claims
 - **Results Display**: Parse and display structured claim data (vehicle info, damage assessment, incident details)
+- **APIM-ready authentication support**: Call an APIM-protected API using a Microsoft Entra OAuth bearer token
 
 ## Architecture
 
@@ -36,6 +37,11 @@ In this challenge, you will create:
 └──────────────┬───────────────────┘
                │
                │ HTTP REST API
+               │
+┌──────────────▼───────────────────┐
+│ Azure API Management (preferred) │
+│   Entra OAuth / APIM policies    │
+└──────────────┬───────────────────┘
                │
 ┌──────────────▼───────────────────┐
 │     Claims Processing API        │
@@ -55,25 +61,39 @@ pip install -r requirements.txt
 
 ### 2. Get your API URL from Challenge 4
 
-Use the **Container Apps URL** from your Challenge 4 deployment:
+Prefer the **API Management gateway URL** from Challenge 4 if you secured the API with an authentication provider:
 
 ```bash
-# Your API URL should look like:
+# Preferred APIM gateway URL
+# https://<your-apim-name>.azure-api.net
+
+# Direct Container Apps URL also works if APIM is not in use
 # https://<your-app-name>.<environment>.<region>.azurecontainerapps.io
 ```
 
-You can find this URL:
-1. In the Azure Portal → **Container Apps** → Your app → **Overview** → **Application Url**
-2. Or from the deployment output in Challenge 4
+You can find these URLs:
+1. In the Azure Portal → **API Management** → Your API → **Gateway URL**
+2. Or in **Container Apps** → Your app → **Overview** → **Application Url**
 
 ### 3. Start the Streamlit UI
 
+For an APIM-protected deployment:
+
 ```bash
 cd challenge-5
-API_URL=https://<your-container-app-url> streamlit run app.py
+API_URL=https://<your-apim-name>.azure-api.net \
+APIM_BEARER_TOKEN=<oauth-access-token> \
+streamlit run app.py
 ```
 
-Or configure the API URL in the sidebar after launching:
+For a local or unsecured deployment:
+
+```bash
+cd challenge-5
+API_URL=http://localhost:8080 streamlit run app.py
+```
+
+Or configure the values in the sidebar after launching:
 
 ```bash
 streamlit run app.py
@@ -85,11 +105,12 @@ Navigate to http://localhost:8501
 
 ## Usage
 
-1. **Configure API URL**: In the sidebar, enter your Container Apps API URL
-2. **Check Health**: Click "Check Health" to verify connectivity
-3. **Upload Image**: Use the file uploader to select a claim image
-4. **Process**: Click "Process Claim" to send the image to the API
-5. **View Results**: See the structured claim data displayed in a user-friendly format
+1. **Configure API URL**: In the sidebar, enter your APIM gateway URL or Container Apps API URL
+2. **Provide Auth**: If APIM authentication is enabled, enter a valid Microsoft Entra bearer token
+3. **Check Health**: Click "Check Health" to verify connectivity
+4. **Upload Image**: Use the file uploader to select a claim image
+5. **Process**: Click "Process Claim" to send the image to the API
+6. **View Results**: See the structured claim data displayed in a user-friendly format
 
 ## UI Features
 
@@ -98,12 +119,14 @@ Navigate to http://localhost:8501
 - Preview of uploaded image
 - One-click claim processing
 - Results display with structured data
+- OAuth bearer token authentication on every protected request
 
 ### 📋 Results Display
 - Vehicle information (make, model, color, year)
 - Damage assessment (severity, estimated cost, affected areas)
 - Incident details (date, location, description)
 - Raw JSON expandable view
+- Expanded error response display for API failures
 
 ## Configuration
 
@@ -111,13 +134,16 @@ Navigate to http://localhost:8501
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `API_URL` | Claims Processing API URL | `http://localhost:8000` |
+| `API_URL` | Claims Processing API URL | `http://localhost:8080` |
+| `APIM_GATEWAY_URL` | Optional fallback API URL for APIM gateway usage | unset |
+| `APIM_BEARER_TOKEN` | Bearer token for APIM-protected calls | unset |
+| `BEARER_TOKEN` | Generic bearer token fallback | unset |
 
 ### Sidebar Settings
 
 - **API URL**: Can be changed dynamically in the sidebar
+- **Bearer Token**: Optional OAuth/OIDC access token used as `Authorization: Bearer ...`
 - **Health Check**: Test API connectivity
-
 
 ## Development
 
@@ -134,10 +160,10 @@ To add new features:
 Congratulations! 🎉 You've successfully built a complete end-to-end claims processing solution:
 
 1. **Challenge 0-3**: Built the AI agents for document processing, OCR, and data extraction
-2. **Challenge 4**: Deployed the multi-agent workflow as a REST API on Azure Container Apps
+2. **Challenge 4**: Deployed the multi-agent workflow as a REST API on Azure Container Apps and exposed it through APIM
 3. **Challenge 5**: Created a user-friendly web interface to interact with the API
 
-Your Streamlit UI now allows users to easily upload claim images and receive structured data extracted by your AI-powered backend.
+Your Streamlit UI now allows users to easily upload claim images and receive structured data extracted by your AI-powered backend, including when the API is secured through APIM.
 
 ### Next Steps
 
