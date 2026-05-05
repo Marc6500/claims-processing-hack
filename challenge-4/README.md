@@ -246,7 +246,7 @@ In this task, we'll use our existing API (already deployed to Azure Container Ap
 
 #### 6.1 Add Your Container App API to APIM
 
-In this step, you'll import your Container App API into Azure API Management. This creates a managed gateway in front of your API, enabling features like subscription keys, rate limiting, caching, and centralized monitoring.
+In this step, you'll import your Container App API into Azure API Management. This creates a managed gateway in front of your API, enabling features like Microsoft Entra OAuth enforcement, rate limiting, caching, and centralized monitoring.
 
 **Steps:**
 
@@ -261,7 +261,25 @@ In this step, you'll import your Container App API into Azure API Management. Th
 
 Once added, APIM acts as a reverse proxy, forwarding requests to your Container App while applying policies, authentication, and rate limiting.
 
-#### 6.2 Configure APIM Policy for the Upload Operation
+#### 6.2 Secure the API with Microsoft Entra OAuth
+
+Before exposing the API broadly, configure Azure API Management to require Microsoft Entra ID as the authentication provider so only authorized callers can access your claims workflow.
+
+**Steps:**
+
+1. Go to **Azure Portal** → **API Management** → Your APIM instance
+2. Navigate to **Security** → **Authentication providers**
+3. Click **+ Add** and configure your OAuth 2.0 / OpenID Connect identity provider backed by **Microsoft Entra ID**
+4. Save the authentication provider configuration and apply it to the Claims Processing API or the relevant operations
+5. Configure APIM to validate JWT access tokens issued by your Entra tenant for the expected audience / app registration
+6. Confirm that callers must now send a valid bearer token when invoking the APIM gateway
+7. Do not require or document API-key or `Ocp-Apim-Subscription-Key` access for this protected path
+
+Once enabled, clients such as the Streamlit UI and test scripts in this repo must send:
+
+- `Authorization: Bearer <access-token>`
+
+#### 6.3 Configure APIM Policy for the Upload Operation
 
 The API server now accepts **raw binary uploads** (`application/octet-stream`) in addition to the standard multipart form-data format. This means the APIM inbound policy no longer needs to read or rewrite the request body, which previously caused MCP `tools/list` to time out (body access triggers response buffering that breaks MCP streaming).
 
@@ -269,13 +287,13 @@ The API server now accepts **raw binary uploads** (`application/octet-stream`) i
 
 **Steps:**
 
-2. Navigate to **APIs** → Select your Claims Processing API
-3. In the **Design** tab, click on the specific **POST /process-claim/upload** operation
-4. In the **Inbound processing** section, click **</> Code**
+1. Navigate to **APIs** → Select your Claims Processing API
+2. In the **Design** tab, click on the specific **POST /process-claim/upload** operation
+3. In the **Inbound processing** section, click **</> Code**
 
 ![alt text](images/apim1.png)
 
-5. Replace the entire policy with the following simplified policy (no body transformation required):
+4. Replace the entire policy with the following simplified policy (no body transformation required):
 
 ```xml
 <policies>
@@ -283,7 +301,6 @@ The API server now accepts **raw binary uploads** (`application/octet-stream`) i
         <base />
         <set-method>POST</set-method>
         <rewrite-uri id="apim-generated-policy" template="/process-claim/upload" />
-        <set-header id="apim-generated-policy" name="Ocp-Apim-Subscription-Key" exists-action="delete" />
     </inbound>
     <backend>
         <base />
@@ -297,25 +314,37 @@ The API server now accepts **raw binary uploads** (`application/octet-stream`) i
 </policies>
 ```
 
-6. Click **Save**
+5. Click **Save**
 
-This policy routes the request to the correct backend and strips the internal subscription-key header without touching the request body. The FastAPI server handles both raw binary and multipart form-data transparently.
+Keep `<base />` in each section so inherited authentication and shared API policies continue to apply. This policy routes the request to the correct backend without touching the request body. The FastAPI server handles both raw binary and multipart form-data transparently.
 
-#### 6.3 Test in APIM Console
+You can now call the secured gateway like this:
+
+```bash
+curl -H "Authorization: Bearer <access-token>" \
+  https://<your-apim-name>.azure-api.net/health
+
+curl -X POST https://<your-apim-name>.azure-api.net/process-claim/upload \
+  -H "Authorization: Bearer <access-token>" \
+  -F "file=@../challenge-0/data/statements/crash1_front.jpeg"
+```
+
+#### 6.4 Test in APIM Console
 
 1. Download an image file to test (challenge-0/data/statements)
 2. Go to the **Test** tab for the `/process-claim/upload` operation
-3. Select **Binary** mode (not Raw)
+3. Provide a valid Entra-issued bearer token
+4. Select **Binary** mode (not Raw)
 
 ![alt text](images/apim3.png)
 
-4. Upload the file on the **Upload File** button
-5. Click **Send**
+5. Upload the file on the **Upload File** button
+6. Click **Send**
 
 If you scroll all the way down, you will receive a JSON response with the structured claim data!
 
 
-## 6.4 Expose API as an MCP Server
+## 6.5 Expose API as an MCP Server
 
 Now let's expose the API we have just created as an MCP Server. 
 
